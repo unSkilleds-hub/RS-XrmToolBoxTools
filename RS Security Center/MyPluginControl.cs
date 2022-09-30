@@ -18,9 +18,10 @@ namespace RS_Security_Center
 {
     public partial class MyPluginControl : PluginControlBase, IPayPalPlugin
     {
-        public string DonationDescription => "Thank you for appreciating my work :)";
+        #region IPayPalPlugin implementation
+        public string DonationDescription => @"Donation for ""RS Security Center"" - XrmToolBox";
         public string EmailAccount => "RSchlanstedt@gmx.net";
-
+        #endregion IPayPalPlugin implementation
         private Settings mySettings;
 
         public MyPluginControl()
@@ -73,9 +74,6 @@ namespace RS_Security_Center
 
                 RetrieveSystemuser();
                 GetRoles();
-
-                listBoxRoles.DataSource = null;
-                listBoxRolesCopyTo.DataSource = null;
             }
         }
         private void ListBoxSystemusers_Click(object sender, EventArgs e)
@@ -240,10 +238,10 @@ namespace RS_Security_Center
                         GlobalControl._systemuser.Sort((x, y) => x.Fullname.CompareTo(y.Fullname));
                         GlobalControl._systemuserCopyTo.Sort((x, y) => x.Fullname.CompareTo(y.Fullname));
 
-                        listBoxSystemusers.DataSource = GlobalControl._systemuser;
+                        listBoxSystemusers.DataSource = new List<SystemUserObj>(GlobalControl._systemuser.ToList());
                         listBoxSystemusers.DisplayMember = "Fullname";
 
-                        listBoxSystemusersCopyTo.DataSource = GlobalControl._systemuserCopyTo;
+                        listBoxSystemusersCopyTo.DataSource = new List<SystemUserObj>(GlobalControl._systemuserCopyTo.ToList());
                         listBoxSystemusersCopyTo.DisplayMember = "Fullname";
                     }
                 }
