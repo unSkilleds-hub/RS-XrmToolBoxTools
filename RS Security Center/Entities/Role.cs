@@ -2,8 +2,6 @@
 // Created by : Latebound Constants Generator 1.2021.12.1 for XrmToolBox
 // Author     : Jonas Rapp https://jonasr.app/
 // GitHub     : https://github.com/rappen/LCG-UDG/
-// Source Org : https://engage365demoDEdev.crm4.dynamics.com
-// Filename   : C:\Users\schlansr\Desktop\Role.cs
 // Created    : 2022-09-16 21:34:42
 // *********************************************************************
 

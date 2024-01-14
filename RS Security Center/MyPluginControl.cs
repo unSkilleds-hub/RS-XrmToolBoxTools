@@ -1,15 +1,9 @@
 ﻿using McTools.Xrm.Connection;
-using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
-using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
-using NuGet.Packaging.Signing;
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using XrmToolBox.Extensibility;
 using XrmToolBox.Extensibility.Interfaces;
@@ -43,10 +37,9 @@ namespace RS_Security_Center
                 LogInfo("Settings found and loaded");
             }
 
-            RetrieveSystemuser();
-            GetRoles();
+            ExecuteMethod(RetrieveAll);
 
-            ShowInfoNotification("Excluded System and application users", new Uri("https://learn.microsoft.com/en-us/power-platform/admin/system-application-users"), 32);
+            ShowInfoNotification("There is a list of special system and application users that is created when the system is provisioned.\r\nDo not delete or modify these users including changing or reassigning security role.", new Uri("https://learn.microsoft.com/en-us/power-platform/admin/system-application-users"), 32);
         }
 
         /// <summary>
@@ -72,11 +65,14 @@ namespace RS_Security_Center
                 mySettings.LastUsedOrganizationWebappUrl = detail.WebApplicationUrl;
                 LogInfo("Connection has changed to: {0}", detail.WebApplicationUrl);
 
-                RetrieveSystemuser();
-                GetRoles();
+                ExecuteMethod(RetrieveAll);
             }
         }
         private void ListBoxSystemusers_Click(object sender, EventArgs e)
+        {
+            Systemusers_UpdateRoles();
+        }
+        private void Systemusers_UpdateRoles()
         {
             SystemUserObj systemUserObj = (SystemUserObj)listBoxSystemusers.SelectedItem;
 
@@ -84,6 +80,10 @@ namespace RS_Security_Center
             listBoxRoles.DisplayMember = "Name";
         }
         private void ListBoxSystemusersCopyTo_Click(object sender, EventArgs e)
+        {
+            SystemusersCopyTo_UpdateRoles();
+        }
+        private void SystemusersCopyTo_UpdateRoles()
         {
             SystemUserObj systemUserCopyToObj = (SystemUserObj)listBoxSystemusersCopyTo.SelectedItem;
 
@@ -172,7 +172,7 @@ namespace RS_Security_Center
 
             QueryExpression query = new QueryExpression("systemuser")
             {
-                ColumnSet = new ColumnSet("systemuserid", "fullname"),
+                ColumnSet = new ColumnSet("systemuserid", "fullname", "createdby", "isdisabled"),
                 Criteria =
                 {
                     Filters =
@@ -192,7 +192,6 @@ namespace RS_Security_Center
                         }
                     }
                 }
-
             };
 
             //
@@ -202,7 +201,7 @@ namespace RS_Security_Center
                 Work = (worker, args) =>
                 {
                     args.Result = Service.RetrieveMultiple(query);
-                    
+
                 },
                 PostWorkCallBack = (args) =>
                 {
@@ -221,33 +220,43 @@ namespace RS_Security_Center
                         foreach (var item in result.Entities)
                         {
                             //
+                            if (item.GetAttributeValue<EntityReference>(SystemUser.CreatedBy)?.Name == "SYSTEM")
+                                continue;
+
+                            //
                             GlobalControl._systemuser.Add(new SystemUserObj
                             {
                                 Fullname = item.GetAttributeValue<string>(SystemUser.PrimaryName),
-                                Id = item.GetAttributeValue<Guid>(SystemUser.PrimaryKey)
+                                Id = item.GetAttributeValue<Guid>(SystemUser.PrimaryKey),
+                                CreatedBy = item.GetAttributeValue<EntityReference>(SystemUser.CreatedBy)?.Name,
+                                IsDisabled = item.GetAttributeValue<bool>(SystemUser.Isdisabled)
+
                             });
 
                             //
                             GlobalControl._systemuserCopyTo.Add(new SystemUserObj
                             {
                                 Fullname = item.GetAttributeValue<string>(SystemUser.PrimaryName),
-                                Id = item.GetAttributeValue<Guid>(SystemUser.PrimaryKey)
+                                Id = item.GetAttributeValue<Guid>(SystemUser.PrimaryKey),
+                                CreatedBy = item.GetAttributeValue<EntityReference>(SystemUser.CreatedBy)?.Name,
+                                IsDisabled = item.GetAttributeValue<bool>(SystemUser.Isdisabled)
                             });
                         }
 
                         GlobalControl._systemuser.Sort((x, y) => x.Fullname.CompareTo(y.Fullname));
                         GlobalControl._systemuserCopyTo.Sort((x, y) => x.Fullname.CompareTo(y.Fullname));
 
-                        listBoxSystemusers.DataSource = new List<SystemUserObj>(GlobalControl._systemuser.ToList());
-                        listBoxSystemusers.DisplayMember = "Fullname";
-
-                        listBoxSystemusersCopyTo.DataSource = new List<SystemUserObj>(GlobalControl._systemuserCopyTo.ToList());
-                        listBoxSystemusersCopyTo.DisplayMember = "Fullname";
+                        FilterSystemuser();
+                        FilterSystemuserCopyTo();
                     }
                 }
             });
         }
         private void buttonSynchronize_Click(object sender, EventArgs e)
+        {
+            ExecuteMethod(Synchronize);
+        }
+        private void Synchronize()
         {
             //
             if (listBoxRoles.Items.Count == 0)
@@ -301,6 +310,10 @@ namespace RS_Security_Center
         }
         private void buttonAssociate_Click(object sender, EventArgs e)
         {
+            ExecuteMethod(Associate);
+        }
+        private void Associate()
+        {
             //
             if (listBoxRoles.Items.Count == 0)
                 return;
@@ -329,6 +342,10 @@ namespace RS_Security_Center
             });
         }
         private void buttonDisassociate_Click(object sender, EventArgs e)
+        {
+            ExecuteMethod(Disassociate);
+        }
+        private void Disassociate()
         {
             //
             if (listBoxRolesCopyTo.Items.Count == 0)
@@ -467,11 +484,97 @@ namespace RS_Security_Center
         }
         private void tSB_RetrieveAll_Click(object sender, EventArgs e)
         {
+            ExecuteMethod(RetrieveAll);
+        }
+        private void RetrieveAll()
+        {
             RetrieveSystemuser();
             GetRoles();
+        }
+        private void txtBoxSystemusersSearch_TextChanged(object sender, EventArgs e)
+        {
+            FilterSystemuser();
+        }
+        private void txtBoxSystemusersCopyToSearch_TextChanged(object sender, EventArgs e)
+        {
+            FilterSystemuserCopyTo();
+        }
+        private void checkBoxInactive_CheckedChanged(object sender, EventArgs e)
+        {
+            FilterSystemuser();
+            FilterSystemuserCopyTo();
+        }
+        private void FilterSystemuser()
+        {
+            //
+            var listToFilter = new List<SystemUserObj>(GlobalControl._systemuser.ToList());
 
-            listBoxRoles.DataSource = null;
-            listBoxRolesCopyTo.DataSource = null;
+            //
+            if (!checkBoxInactive.Checked)
+            {
+                listToFilter = listToFilter.Where(x => x.IsDisabled == false).ToList();
+            }
+
+            //
+            if (!checkBoxSystemuser.Checked)
+            {
+                listToFilter = listToFilter.Where(x => x.CreatedBy is null || x.CreatedBy != "SYSTEM").ToList();
+            }
+
+            //
+            if (!string.IsNullOrEmpty(txtBoxSystemusersSearch.Text))
+            {
+                listToFilter = listToFilter.Where(x => x.Fullname.ToLowerInvariant().Contains(txtBoxSystemusersSearch.Text.ToLowerInvariant())).ToList();
+            }
+
+            listBoxSystemusers.DataSource = listToFilter;
+            listBoxSystemusers.DisplayMember = "Fullname";
+
+            if (listBoxSystemusers.Items.Count == 1)
+                Systemusers_UpdateRoles();
+            else
+                listBoxRoles.DataSource = null;
+        }
+        private void FilterSystemuserCopyTo()
+        {
+            //
+            var listToFilter = new List<SystemUserObj>(GlobalControl._systemuser.ToList());
+
+            //
+            if (!checkBoxInactive.Checked)
+            {
+                listToFilter = listToFilter.Where(x => x.IsDisabled == false).ToList();
+            }
+
+            //
+            if (!checkBoxSystemuser.Checked)
+            {
+                listToFilter = listToFilter.Where(x => x.CreatedBy is null || x.CreatedBy != "SYSTEM").ToList();
+            }
+
+            //
+            if (!string.IsNullOrEmpty(txtBoxSystemusersCopyToSearch.Text))
+            {
+                listToFilter = listToFilter.Where(x => x.Fullname.ToLowerInvariant().Contains(txtBoxSystemusersCopyToSearch.Text.ToLowerInvariant())).ToList();
+            }
+
+            listBoxSystemusersCopyTo.DataSource = listToFilter;
+            listBoxSystemusersCopyTo.DisplayMember = "Fullname";
+
+            if (listBoxSystemusersCopyTo.Items.Count == 1)
+                SystemusersCopyTo_UpdateRoles();
+            else
+                listBoxRolesCopyTo.DataSource = null;
+        }
+        private void checkBoxSystemuser_CheckedChanged(object sender, EventArgs e)
+        {
+            FilterSystemuser();
+            FilterSystemuserCopyTo();
+        }
+
+        private void listBoxSystemusers_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
         }
     }
     public class GlobalControl
